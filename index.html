@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173c34">
+  <title>Trip Packing List</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./config.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header><div class="hero">
+    <p class="trip">2 days · 2 nights</p>
+    <h1>Trip packing list</h1>
+    <p>70°F days · 55°F nights · Swimming</p>
+  </div></header>
+  <main>
+    <section class="summary" aria-label="Packing progress">
+      <div class="stats">
+        <strong id="count" aria-live="polite"></strong>
+        <button id="filter" aria-pressed="false">Hide packed</button>
+      </div>
+      <progress id="progress" aria-label="Items packed"></progress>
+      <p id="status" role="status"></p>
+    </section>
+    <div id="list"></div>
+    <p id="done" hidden>Everything is packed. Have a great trip!</p>
+  </main>
+</body>
+</html>
