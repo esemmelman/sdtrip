@@ -50,69 +50,166 @@ const state = JSON.parse(localStorage.getItem(storageKey) || 'null') ?? {
   pending: {},
 };
 
+state.details ??= {};
+for (const [id, pending] of Object.entries(state.pending)) {
+  if (typeof pending === 'boolean') state.pending[id] = { packed: pending };
+}
+
 const list = document.querySelector('#list');
 const count = document.querySelector('#count');
 const progress = document.querySelector('#progress');
 const status = document.querySelector('#status');
 const filter = document.querySelector('#filter');
 const done = document.querySelector('#done');
-const sections = [];
-const checks = new Map();
+const empty = document.querySelector('#empty');
+const add = document.querySelector('#add');
+const dialog = document.querySelector('#editor');
+const title = document.querySelector('#editor-title');
+const form = document.querySelector('#edit-form');
+const nameInput = document.querySelector('#item-name');
+const remove = document.querySelector('#remove');
+const deleteDialog = document.querySelector('#confirm-delete');
+const deleteName = document.querySelector('#delete-name');
+
+const items = new Map();
+const categories = [...groups.map(([category]) => category), 'Custom items'];
+for (const [category, defaults] of groups) {
+  for (const [id, name] of Object.entries(defaults)) {
+    items.set(id, { category, name });
+  }
+}
 let hidePacked = false;
 let syncing = false;
 let loaded = false;
+let editingId = null;
 
 function save() {
   localStorage.setItem(storageKey, JSON.stringify(state));
 }
 
-function render() {
-  let packedCount = 0;
-  for (const { section, ids } of sections) {
-    let visible = 0;
-    for (const id of ids) {
-      const check = checks.get(id);
-      check.checked = state.packed[id] === true;
-      check.parentElement.hidden = hidePacked && check.checked;
-      packedCount += Number(check.checked);
-      visible += Number(!check.parentElement.hidden);
-    }
-    section.hidden = visible === 0;
-  }
-  count.textContent = packedCount + ' of ' + checks.size + ' packed';
-  progress.value = packedCount;
-  done.hidden = packedCount !== checks.size;
+function getItem(id) {
+  const details = state.details[id];
+  return {
+    name: details?.name ?? items.get(id)?.name,
+    category: items.get(id)?.category ?? 'Custom items',
+    deleted: details?.deleted ?? false,
+    packed: state.packed[id] === true,
+  };
 }
 
-function change(id, checked) {
-  state.packed[id] = checked;
-  state.pending[id] = checked;
+function render() {
+  const focused = document.activeElement;
+  const focusId = focused?.closest('[data-item]')?.dataset.item;
+  const focusSelector = focused?.matches('input') ? 'input' : 'button';
+  const sections = new Map();
+  let total = 0;
+  let packedCount = 0;
+  for (const id of new Set([...items.keys(), ...Object.keys(state.details)])) {
+    const item = getItem(id);
+    if (item.deleted || !item.name) continue;
+    total += 1;
+    packedCount += Number(item.packed);
+    if (hidePacked && item.packed) continue;
+    if (!sections.has(item.category)) sections.set(item.category, []);
+    sections.get(item.category).push(createRow(id, item));
+  }
+
+  const content = document.createDocumentFragment();
+  for (const category of categories) {
+    const rows = sections.get(category);
+    if (!rows) continue;
+    const section = document.createElement('section');
+    const heading = document.createElement('h2');
+    const container = document.createElement('div');
+    heading.textContent = category;
+    container.className = 'items';
+    container.append(...rows);
+    section.append(heading, container);
+    content.append(section);
+  }
+  list.replaceChildren(content);
+  count.textContent = packedCount + ' of ' + total + ' packed';
+  progress.max = Math.max(total, 1);
+  progress.value = packedCount;
+  done.hidden = total === 0 || packedCount !== total;
+  empty.hidden = total !== 0;
+  if (focusId) {
+    const target = list.querySelector('[data-item="' + CSS.escape(focusId) + '"] ' + focusSelector);
+    (target ?? filter).focus({ preventScroll: true });
+  }
+}
+
+function createRow(id, item) {
+  const row = document.createElement('div');
+  const label = document.createElement('label');
+  const check = document.createElement('input');
+  const text = document.createElement('span');
+  const edit = document.createElement('button');
+  row.className = 'item';
+  row.dataset.item = id;
+  check.type = 'checkbox';
+  check.checked = item.packed;
+  text.textContent = item.name;
+  check.addEventListener('change', () => update(id, { packed: check.checked }));
+  edit.type = 'button';
+  edit.className = 'edit';
+  edit.textContent = 'Edit';
+  edit.setAttribute('aria-label', 'Edit ' + item.name);
+  edit.addEventListener('click', () => openEditor(id));
+  label.append(check, text);
+  row.append(label, edit);
+  return row;
+}
+
+function update(id, changes) {
+  const item = { ...getItem(id), ...changes };
+  state.packed[id] = item.packed;
+  if ('name' in changes || 'deleted' in changes) {
+    state.details[id] = { name: item.name, deleted: item.deleted };
+  }
+  state.pending[id] = { ...state.pending[id], ...changes };
   save();
   render();
   void sync();
 }
 
-for (const [title, items] of groups) {
-  const section = document.createElement('section');
-  const heading = document.createElement('h2');
-  const rows = document.createElement('div');
-  heading.textContent = title;
-  rows.className = 'items';
-  for (const [id, name] of Object.entries(items)) {
-    const label = document.createElement('label');
-    const check = document.createElement('input');
-    const text = document.createElement('span');
-    check.type = 'checkbox';
-    text.textContent = name;
-    check.addEventListener('change', () => change(id, check.checked));
-    label.append(check, text);
-    rows.append(label);
-    checks.set(id, check);
-  }
-  section.append(heading, rows);
-  list.append(section);
-  sections.push({ section, ids: Object.keys(items) });
+function openEditor(id) {
+  editingId = id;
+  title.textContent = id ? 'Edit item' : 'Add item';
+  nameInput.value = id ? getItem(id).name : '';
+  nameInput.setCustomValidity('');
+  remove.hidden = !id;
+  dialog.showModal();
+  nameInput.select();
 }
+
+add.addEventListener('click', () => openEditor(null));
+nameInput.addEventListener('input', () => nameInput.setCustomValidity(''));
+form.addEventListener('submit', event => {
+  event.preventDefault();
+  const name = nameInput.value.trim();
+  if (!name) {
+    nameInput.setCustomValidity('Enter an item name.');
+    nameInput.reportValidity();
+    return;
+  }
+  const id = editingId ?? 'custom_' + crypto.randomUUID().replaceAll('-', '');
+  dialog.close();
+  update(id, { name });
+});
+
+document.querySelector('#cancel-edit').addEventListener('click', () => dialog.close());
+remove.addEventListener('click', () => {
+  deleteName.textContent = getItem(editingId).name;
+  deleteDialog.showModal();
+});
+deleteDialog.addEventListener('close', () => {
+  if (deleteDialog.returnValue !== 'delete') return;
+  dialog.close();
+  update(editingId, { deleted: true });
+  add.focus();
+});
+deleteDialog.addEventListener('cancel', () => { deleteDialog.returnValue = ''; });
 
 filter.addEventListener('click', () => {
   hidePacked = !hidePacked;
@@ -141,10 +238,16 @@ async function sync() {
   status.textContent = 'Connecting to Supabase…';
   try {
     if (!loaded) {
-      const response = await request('?select=item_id,packed');
+      const response = await request('?select=item_id,packed,item_name,deleted');
       for (const row of await response.json()) {
-        if (checks.has(row.item_id) && !Object.hasOwn(state.pending, row.item_id)) {
-          state.packed[row.item_id] = row.packed;
+        const id = row.item_id;
+        const pending = state.pending[id] ?? {};
+        state.packed[id] = pending.packed ?? row.packed;
+        if (row.item_name !== null || row.deleted || state.details[id]) {
+          state.details[id] = {
+            name: pending.name ?? row.item_name,
+            deleted: pending.deleted ?? row.deleted,
+          };
         }
       }
       loaded = true;
@@ -159,9 +262,16 @@ async function sync() {
           'Content-Type': 'application/json',
           Prefer: 'resolution=merge-duplicates,return=minimal',
         },
-        body: JSON.stringify(batch.map(([item_id, packed]) => ({
-          checklist_key: state.key, item_id, packed,
-        }))),
+        body: JSON.stringify(batch.map(([item_id]) => {
+          const item = getItem(item_id);
+          return {
+            checklist_key: state.key,
+            item_id,
+            packed: item.packed,
+            item_name: state.details[item_id]?.name ?? null,
+            deleted: item.deleted,
+          };
+        })),
       });
       for (const [id, packed] of batch) {
         if (state.pending[id] === packed) delete state.pending[id];
@@ -177,7 +287,6 @@ async function sync() {
 }
 
 save();
-progress.max = checks.size;
 render();
 window.addEventListener('online', sync);
 window.addEventListener('focus', sync);

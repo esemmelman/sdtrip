@@ -14,13 +14,40 @@
     <section class="summary" aria-label="Packing progress">
       <div class="stats">
         <strong id="count" aria-live="polite"></strong>
-        <button id="filter" aria-pressed="false">Hide packed</button>
+        <div class="stats-actions">
+          <button id="filter" aria-pressed="false">Hide packed</button>
+          <button id="add" class="primary">Add item</button>
+        </div>
       </div>
       <progress id="progress" aria-label="Items packed"></progress>
       <p id="status" role="status"></p>
     </section>
     <div id="list"></div>
     <p id="done" hidden>Everything is packed. Have a great trip!</p>
+    <p id="empty" hidden>No items in your checklist.</p>
+    <dialog id="editor" aria-labelledby="editor-title">
+      <form id="edit-form">
+        <h2 id="editor-title"></h2>
+        <label class="field">Item name
+          <input id="item-name" required maxlength="100" autofocus>
+        </label>
+        <div class="dialog-actions">
+          <button type="button" id="remove" class="delete">Delete</button>
+          <button type="button" id="cancel-edit">Cancel</button>
+          <button type="submit" class="primary">Save item</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="confirm-delete" aria-labelledby="delete-title">
+      <form method="dialog">
+        <h2 id="delete-title">Delete item?</h2>
+        <p id="delete-name"></p>
+        <div class="dialog-actions">
+          <button value="cancel" autofocus>Cancel</button>
+          <button value="delete" class="delete">Delete item</button>
+        </div>
+      </form>
+    </dialog>
   </main>
 </body>
 </html>
